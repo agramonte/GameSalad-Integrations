@@ -1,4 +1,4 @@
-//Version 2020.5.04.1
+//Version 2020.5.04.2
 //Game:
 var gameCustomId = "xxxx";
 var oneSignalAppId = "xxxxx";
@@ -8,7 +8,7 @@ var vCurrencyName = "ST";
 var services = {
     "toast" : {
         type: "capability",
-        enabled: "true"
+        enabled: "false"
     },
     "userInventory": {
         type: "serviceCall",
