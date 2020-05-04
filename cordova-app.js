@@ -1,33 +1,53 @@
-//Version 2020.4.30.1
+//Version 2020.5.04.1
 //Game:
-var gameCustomId = "xxx";
-var oneSignalAppId = "xxx";
+var gameCustomId = "xxxx";
+var oneSignalAppId = "xxxxx";
 var vCurrencyName = "ST";
 
 //Table Mappings:
-var tableMappings = {
+var services = {
+    "toast" : {
+        type: "capability",
+        enabled: "true"
+    },
+    "userInventory": {
+        type: "serviceCall",
+        enabled: true,
+        isDebug: true,
+        tableColumnsValues:['ItemId','DisplayName','RemainingUses']
+
+        /* Example playloadItem:
+         {
+             "ItemId": "LHint",
+             "ItemInstanceId": "3E7C408BE06E61AC",
+             "ItemClass": "LHint",
+             "PurchaseDate": "2020-04-28T00:51:18.979Z",
+             "RemainingUses": 4,
+             "CatalogVersion": "1",
+             "DisplayName": "hint x1",
+             "UnitCurrency": "ST",
+             "UnitPrice": 100
+         }
+         
+         */
+    },
     "storeItems" : {
         type:"serviceCall",
         enabled: true,
         isDebug: true,
-        tableColumnsValues:["ItemClass","DisplayName","VirtualCurrencyPrices.ST","Description"]
+        tableColumnsValues:['ItemClass','DisplayName','VirtualCurrencyPrices.ST','Description']
         
         /* Example payloadItem:
          {
              "ItemId": "LHint",
+             "ItemInstanceId": "3E7C408BE06E61AC",
+             "ItemClass": "LHint",
+             "PurchaseDate": "2020-04-28T00:51:18.979Z",
+             "RemainingUses": 4,
              "CatalogVersion": "1",
-             "DisplayName": "Hint",
-             "Description": "Show the placement of 1 letter.",
-             "VirtualCurrencyPrices": {
-                 "ST": 100
-             },
-             "Tags": [],
-             "Consumable": {},
-             "CanBecomeCharacter": false,
-             "IsStackable": true,
-             "IsTradable": false,
-             "IsLimitedEdition": false,
-             "InitialLimitedEditionCount": 0
+             "DisplayName": "hint x1",
+             "UnitCurrency": "ST",
+             "UnitPrice": 100
          }
          
          */
@@ -52,7 +72,7 @@ var tableMappings = {
         isDebug: true,
         tableName: "playfab",
         tableColumnsValues:[1],
-        tableRowValues:["UserVirtualCurrency.ST"]
+        tableRowValues:["UserVirtualCurrency." + vCurrencyName]
 
         /* Example payload
         {"UserInventory":[],"UserVirtualCurrency":{"ST":1000},"UserVirtualCurrencyRechargeTimes":{},"UserData":{"avatar":{"Value":"4","LastUpdated":"2020-04-19T16:07:03.876Z","Permission":"Public"},"playSound":{"Value":"false","LastUpdated":"2020-04-15T03:38:27.842Z","Permission":"Public"}},"UserDataVersion":52,"UserReadOnlyDataVersion":0,"CharacterInventories":[]}
@@ -77,7 +97,8 @@ var tableMappings = {
 //Retrieve from Playfab
 var infoRequestParameters = {
     GetUserData:true,
-    GetUserVirtualCurrency:true
+    GetUserVirtualCurrency:true,
+    GetUserInventory:true
 };
 
 //Leaderboards:
@@ -90,6 +111,7 @@ var attributeMappings = {"avatar":"id187673", "playSound":"id569651"};
 //-----------------------
 var playfabTable;
 var catalogTable;
+var userInventoryTable;
 
 var app = {
     // Application Constructor
@@ -107,8 +129,8 @@ var app = {
     getTableRequest: function(table) {
         
         var tableName = table.getName();
-        
-        if (tableMappings[tableName].type === "leaderboard") {
+
+        if (services[tableName].type === "leaderboard") {
             app.getLeaderboard(table);
             
         } else {
@@ -117,7 +139,7 @@ var app = {
                     var statusRowIndex = table.getTableData().lookupRow("status");
                     var isConnected = false;
                     
-                    if (statusRowIndex > 0 && table.getCellSafe(statusRowIndex ,1 ) == "connected") {
+                    if (statusRowIndex > 0 && table.getCellSafe(statusRowIndex ,1 ) === "connected") {
                         isConnected = true;
                     }
                     
@@ -139,7 +161,11 @@ var app = {
                     catalogTable = table;
                     app.getCatalogItems(catalogTable);
                     break;
-                    
+
+                case 'userInventory':
+                    userInventoryTable = table;
+                    break;
+
                 default:
                     break;
             }
@@ -246,6 +272,7 @@ var app = {
         
         var columns = tableColumnsValues;
         var rows;
+        var tableName = table.getName();
         
         if (Array.isArray( dataSource ) === true) {
             rows = dataSource;
@@ -259,7 +286,7 @@ var app = {
         var rNumber = 0;
         
         for (var i in rows) {
-
+            
             rNumber = rNumber + 1;
             if (i + 1 > tableRowCount && rows.length > rNumber) {
                table.addRow(rNumber);
@@ -268,12 +295,12 @@ var app = {
             var cNumber = 0;
             
             for (var j in columns) {
-
                 
                 cNumber = cNumber + 1;
 
                 var value;
                 if (Array.isArray( dataSource ) === true) {
+
                     value = app.getPropertyValue(dataSource[i],columns[j]);
 
                     if (cNumber === 1) {
@@ -282,7 +309,6 @@ var app = {
                 } else {
 
                     value = app.getPropertyValue(dataSource,rows[j]);
-
                     if (cNumber === 1) {
 
                         table.getTableData().setRowName(rNumber, rows[j] + "");
@@ -290,11 +316,9 @@ var app = {
                 }
                 table.setCellSafe(rNumber, cNumber, value);
             }
-        }
-
-
-        
+        }   
     },
+
     populateGameAttributes: function(dataSource, mappings) {
         
         for (var i in mappings) {
@@ -302,19 +326,101 @@ var app = {
         }
         
     },
+
+    updateTableValue:function(table, rowLable, column, value) {
+        var rowIndex = table.getTableData().lookupRow(rowLable);
+        console.log("**** rowIndex", rowIndex);
+        if (rowIndex > 0) {
+            var cellValue = table.getCellSafe(rowIndex,column );
+            console.log("**** cv", cellValue);
+            if (cellValue) {
+                console.log("**** here");
+                table.setCellSafe(rowIndex, column, value);
+            }
+
+        }
+                    
+
+
+
+    },
     
     //------------
     //Playfab
     //------------
-    purchaseItem: function(table, itemId, price, virtualCurrency) {
+
+    getUserInventory: function(table) {
+        if (services.userInventory.enabled === false) {
+            return;
+        }
+
+        function  getUserInventoryCallback (result, error) {
+            if (result !== null) {
+                if (result.data) {
+
+                    if (result.data.Inventory) {
+
+                        var items = result.data.Inventory;
+                        app.populateTable(table, items, services[table.getName()].tableColumnsValues, null);
+                    
+                    }
+
+                    if (result.data.VirtualCurrency &&
+                    result.data.VirtualCurrency[vCurrencyName]) {
+
+                        var userCurrencyRowName = "UserVirtualCurrency." + vCurrencyName;
+                        var currencyValue = result.data.VirtualCurrency[vCurrencyName];
+
+                        console.log("**** ucn, cv:", userCurrencyRowName, currencyValue, "***");
+                        app.updateTableValue(playfabTable, userCurrencyRowName, 1, currencyValue);
+                    }
+
+                }
+                
+                if (services.userInventory.isDebug === true) {
+                    console.log("*** getUserInventoryCallback:", JSON.stringify(result) );
+                    
+                }
+                
+                
+            } else if (error !== null) {
+                console.error("*** getUserInventoryCallback:", JSON.stringify(error) );
+                
+            }
+            
+            
+        }
+        
+        var getUserInventoryRequest = {
+        };
+        
+        PlayFabClientSDK.GetUserInventory(getUserInventoryRequest, getUserInventoryCallback);
+
+    },
+
+    purchaseItem: function(itemId, price, virtualCurrency) {
         
         function  purchaseItemCallback (result, error) {
             if (result !== null) {
-                console.log("*** purchaseItemCallback:", JSON.stringify(result) );
+
+                app.getUserInventory(userInventoryTable);
+                
+                if (services.toast.enabled === true) {
+                    window.plugins.toast.show("Purchase successful. Thank you.", 'short', 'center');
+                }
+                 
+
+                if (services.storeItems.isDebug === true) {
+                    console.log("*** purchaseItemCallback:", JSON.stringify(result) );
+                }
                 
             } else if (error !== null) {
                 console.error("*** purchaseItemCallback:", JSON.stringify(error) );
-                
+
+                if (services.toast.enabled === true) {
+                    window.plugins.toast.show(error.errorMessage, 'short', 'center');
+                }
+                   
             }
             
             
@@ -331,7 +437,7 @@ var app = {
     },
     getCatalogItems: function(table) {
 
-        if (tableMappings.storeItems.enabled === false ) {
+        if (services.storeItems.enabled === false ) {
             return;
         }
         
@@ -340,7 +446,7 @@ var app = {
                 
                 if (result.data.Catalog) {
                     var items = result.data.Catalog;
-                    app.populateTable(table, items, tableMappings[table.getName()].tableColumnsValues, null);
+                    app.populateTable(table, items, services[table.getName()].tableColumnsValues, null);
                                   
                 }    
 
@@ -424,7 +530,7 @@ var app = {
         function getLeaderboardCallback (result, error) {
             if (result !== null) {
                 var leaderboards = result.data.Leaderboard;
-                app.populateTable(table, leaderboards, tableMappings.leaderboard.tableColumnsValues, null);
+                app.populateTable(table, leaderboards, services.leaderboard.tableColumnsValues, null);
             
             } else if (error !== null) {
                 console.error("*** getLeaderboard", error);
@@ -436,7 +542,7 @@ var app = {
         var getLeaderboardRequest = {
             StartPosition: 0,
             StatisticName: table.getName(),
-            MaxResultsCount: tableMappings[table.getName()].maxResults
+            MaxResultsCount: services[table.getName()].maxResults
         };
         
         PlayFabClientSDK.GetLeaderboard(getLeaderboardRequest, getLeaderboardCallback);
@@ -514,7 +620,7 @@ var app = {
 
 
             if (result !== null) {
-                if (tableMappings.playfab.isDebug === true){
+                if (services.playfab.isDebug === true){
                     console.log("*** loginWithIOSDeviceIDCallback: ", JSON.stringify(result.data));
                 }
                 
@@ -523,17 +629,23 @@ var app = {
                 result.data.InfoResultPayload.UserData) {
 
                     app.populateGameAttributes(result.data.InfoResultPayload.UserData, attributeMappings);
-                    app.populateTable(table, result.data.InfoResultPayload, tableMappings.playfab.tableColumnsValues, tableMappings.playfab.tableRowValues );
+                    app.populateTable(table, result.data.InfoResultPayload, services.playfab.tableColumnsValues, services.playfab.tableRowValues );
                 }
 
-                if (tableMappings.oneSignal.enabled === true && 
+                if (services.oneSignal.enabled === true && 
                     result.data &&
                     result.data.PlayFabId) {
                         window.plugins.OneSignal.setExternalUserId(result.data.PlayFabId);
                         
                 }
 
-               
+                if (services.userInventory.enabled === true &&
+                    result.data && 
+                    result.data.InfoResultPayload && 
+                    result.data.InfoResultPayload.UserInventory) {
+                        app.populateTable(userInventoryTable, result.data.InfoResultPayload.UserInventory, services.userInventory.tableColumnsValues, null);
+                }
+
             } else if (error !== null) {
                 console.error("*** loginWithIOSDeviceID:", error);
                 
@@ -576,7 +688,7 @@ var app = {
                         var statusRowIndex = catalogTable.getTableData().lookupRow(msg);
                         var itemPrice = catalogTable.getCellSafe(statusRowIndex , 3);
                         
-                        app.purchaseItem(playfabTable, msg, itemPrice ,vCurrencyName);
+                        app.purchaseItem(msg, itemPrice ,vCurrencyName);
                             
                     },
                     
@@ -660,10 +772,10 @@ var app = {
 				engine.loadOptionsFromURL();
                 engine.play();
 
-                if (tableMappings.oneSignal.enabled === true) {
+                if (services.oneSignal.enabled === true) {
 
                     var oneSignalLogLevel = 0;
-                    if (tableMappings.oneSignal.isDebug === true) {
+                    if (services.oneSignal.isDebug === true) {
                         oneSignalLogLevel = 6;
                     }
 
@@ -672,11 +784,11 @@ var app = {
                     var notificationOpenedCallback = function(jsonData) {
 
                         if (playfabTable) {
-                            app.populateTable( playfabTable, jsonData, tableMappings.oneSignal.tableColumnsValues, tableMappings.oneSignal.tableRowValues);
+                            app.populateTable( playfabTable, jsonData, services.oneSignal.tableColumnsValues, services.oneSignal.tableRowValues);
 
                         }
                         
-                        if (tableMappings.oneSignal.isDebug === true) {
+                        if (services.oneSignal.isDebug === true) {
                             console.log('*** initOneSignalCallback: ', JSON.stringify(jsonData));
                         }
                     };
